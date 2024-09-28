@@ -64,5 +64,4 @@ compile_commands.json
 *.vcxproj
 *.filters
 *.user
-sdk/*
-ViewerTest/*
+sdk/* 
