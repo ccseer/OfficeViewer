@@ -52,3 +52,17 @@ compile_commands.json
 *creator.user*
 
 *_qmlcache.qrc
+
+
+
+# 
+*.zip
+.vscode/*
+*.rc
+*.qtvscr
+*.sln
+*.vcxproj
+*.filters
+*.user
+sdk/*
+ViewerTest/*
