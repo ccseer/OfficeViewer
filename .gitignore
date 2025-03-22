@@ -64,5 +64,5 @@ compile_commands.json
 *.vcxproj
 *.filters
 *.user
-sdk/* 
-/OitViewer/.vscode
+sdk/*
+*/.vscode
