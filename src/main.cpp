@@ -24,7 +24,7 @@ int main(int argc, char* argv[])
 
     a.setOrganizationName("Corey");
     a.setApplicationName("Seer");
-    a.setOrganizationDomain("http://1218.io");
+    a.setOrganizationDomain("https://1218.io");
     a.setApplicationDisplayName("OfficeViewer");
     // will generate a .oit cache directory at runtime
     // put it under Seer folder
