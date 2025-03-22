@@ -11,10 +11,14 @@ FORMS += oitviewer.ui
 
 INCLUDEPATH+= $$PWD/../sdk/common
 
-VERSION = 1.3.0
-include(../../../common.pri)
 
-HEADERS += ../../../../github/FontViewer/oitvar.h
-INCLUDEPATH += ../../../../github/FontViewer/
+HEADERS += ../Seer-sdk/seer/embedplugin.h
+INCLUDEPATH +=  ../Seer-sdk/
 
 
+
+VERSION = 1.4.0
+QMAKE_TARGET_COMPANY = "1218.io"
+QMAKE_TARGET_PRODUCT = "Seer"
+QMAKE_TARGET_DESCRIPTION = "Seer - A Windows Quick Look Tool"
+QMAKE_TARGET_COPYRIGHT = "Corey"

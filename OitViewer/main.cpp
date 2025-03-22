@@ -2,8 +2,8 @@
 #include <QFile>
 #include <QStandardPaths>
 
-#include "oitvar.h"
 #include "oitviewer.h"
+#include "seer/embedplugin.h"
 
 int main(int argc, char* argv[])
 {

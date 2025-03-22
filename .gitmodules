@@ -1,0 +1,3 @@
+[submodule "Seer-sdk"]
+	path = Seer-sdk
+	url = https://github.com/ccseer/Seer-sdk.git

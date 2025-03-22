@@ -1,12 +1,13 @@
 #include "oitviewer.h"
 
 #include <QDataStream>
+#include <QIODevice>
 #include <QScreen>
 #include <QTimer>
 #include <iostream>
 
-#include "oitvar.h"
 #include "sccvw.h"
+#include "seer/embedplugin.h"
 #include "ui_oitviewer.h"
 
 // has to after "sccvw.h"
@@ -151,7 +152,7 @@ QVariant OITViewer::getDataFromSeerMsg(const QByteArray &ba) const
     return v;
 }
 
-bool OITViewer::nativeEvent(const QByteArray &ba, void *msg, long *result)
+bool OITViewer::nativeEvent(const QByteArray &ba, void *msg, qintptr *result)
 {
     MSG *m = (MSG *)msg;
     switch (m->message) {

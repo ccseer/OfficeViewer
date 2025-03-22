@@ -20,7 +20,7 @@ public:
     bool init();
 
 protected:
-    bool nativeEvent(const QByteArray &ba, void *msg, long *result) override;
+    bool nativeEvent(const QByteArray &ba, void *msg, qintptr *result) override;
 
 private:
     bool createViewer();
