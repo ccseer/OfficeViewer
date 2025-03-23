@@ -22,15 +22,6 @@ int main(int argc, char* argv[])
         return ERR_FILE_NOT_FOUND;
     }
 
-    a.setOrganizationName("Corey");
-    a.setApplicationName("Seer");
-    a.setOrganizationDomain("https://1218.io");
-    a.setApplicationDisplayName("OfficeViewer");
-    // will generate a .oit cache directory at runtime
-    // put it under Seer folder
-    qputenv("OIT_DATA_PATH", QStandardPaths::writableLocation(
-                                 QStandardPaths::AppLocalDataLocation)
-                                 .toUtf8());
 
     OITViewer w(args[1].toInt(), p);
     // argv[1] -> only english characters can be read

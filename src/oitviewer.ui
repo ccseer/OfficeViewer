@@ -1,9 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <author/>
- <comment/>
- <exportmacro/>
  <class>OITViewer</class>
- <widget name="OITViewer" class="QWidget">
+ <widget class="QWidget" name="OITViewer">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -12,10 +10,7 @@
     <height>300</height>
    </rect>
   </property>
-  <property name="windowTitle">
-   <string>Form</string>
-  </property>
  </widget>
- <pixmapfunction/>
+ <resources/>
  <connections/>
 </ui>

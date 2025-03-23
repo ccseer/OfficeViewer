@@ -1,8 +1,7 @@
 # OfficeViewer
-A plugin for Seer Pro
+
+**OfficeViewer** is a plugin for **Seer Pro** that enables fast preview of Microsoft Office files directly within the Seer preview window.
 
 
-- SDK
-  - https://github.com/ccseer/OfficeViewer/releases/tag/SDK
-- oitvar.h
-  - https://github.com/ccseer/FontViewer/blob/main/oitvar.h
+ 
+- Office SDK available at: [SDK Release](https://github.com/ccseer/OfficeViewer/releases/tag/SDK)

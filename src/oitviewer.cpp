@@ -1,33 +1,51 @@
 #include "oitviewer.h"
 
-#include <QDataStream>
-#include <QIODevice>
-#include <QScreen>
+#include <QDir>
+#include <QPointer>
+#include <QResizeEvent>
+#include <QStandardPaths>
+#include <QThread>
 #include <QTimer>
-#include <iostream>
 
 #include "sccvw.h"
-#include "seer/embedplugin.h"
 #include "ui_oitviewer.h"
 
-// has to after "sccvw.h"
-#include "scclink.c"
 #pragma comment(lib, "user32.lib")
+// need to be included below sccvw.h
+#include "scclink.c"
 
-OITViewer::OITViewer(int wnd_index, QString p, QWidget *parent)
-    : QWidget(parent),
+#define qprintt qDebug() << "[officeviewer]"
+
+class Thread : public QThread {
+    using QThread::run;
+
+public:
+    ~Thread() override
+    {
+        quit();
+        wait();
+        qprintt << "~" << this;
+    }
+};
+
+OITViewer::OITViewer(QWidget *parent)
+    : ViewerBase(parent),
+      m_container(nullptr),
       m_viewer(nullptr),
       m_lib(nullptr),
-      m_wnd_index(wnd_index),
-      m_path(std::move(p)),
       ui(new Ui::OITViewer)
 {
     ui->setupUi(this);
-    // no taskbar icon
-    setWindowFlags(Qt::FramelessWindowHint | Qt::Tool);
-    setWindowTitle("OITViewer");
-    // default size
-    resize(960, 720);
+    // a.setOrganizationName("Corey");
+    // a.setApplicationName("Seer");
+    // a.setOrganizationDomain("https://1218.io");
+    // a.setApplicationDisplayName("OfficeViewer");
+
+    // will generate a .oit cache directory at runtime
+    // put it under Seer folder
+    qputenv("OIT_DATA_PATH", QStandardPaths::writableLocation(
+                                 QStandardPaths::AppLocalDataLocation)
+                                 .toUtf8());
 }
 
 OITViewer::~OITViewer()
@@ -41,66 +59,86 @@ OITViewer::~OITViewer()
     delete ui;
 }
 
-bool OITViewer::init()
+QSize OITViewer::getContentSize() const
 {
-    /// init() costs 200ms
-    QString dir_dll = qApp->applicationDirPath() + "\\";
-    m_lib           = SCCLoadViewerDLL((wchar_t *)dir_dll.utf16());
-    if (m_lib == nullptr) {
-        std::cout << "SCCLoadViewerDLL Err" << '\n';
-        return false;
+    return m_d->d->dpr * QSize(800, 700);
+}
+
+void OITViewer::loadImpl(QBoxLayout *layout_content,
+                         QHBoxLayout *layout_control_bar)
+{
+    if (layout_control_bar) {
+        layout_control_bar->addStretch();
     }
-    if (!createViewer()) {
-        std::cout << "CreateViewer Err" << '\n';
-        return false;
+    m_container = new QWidget(this);
+    m_container->setAttribute(Qt::WA_DontCreateNativeAncestors, true);
+    m_container->setAttribute(Qt::WA_NativeWindow, true);
+    layout_content->addWidget(m_container);
+    asyncInit();
+}
+
+void OITViewer::asyncInit()
+{
+    QString dir_dll = getDLLPath();
+    if (dir_dll.isEmpty()) {
+        qprintt << "dir dll";
+        emit sigCommand(ViewCommandType::VCT_StateChange, VCV_Error);
+        return;
     }
-    if (!viewFile(m_path)) {
-        std::cout << "ViewFile Err" << '\n';
-        return false;
+    dir_dll.replace("/", "\\");
+    if (!dir_dll.endsWith("\\")) {
+        dir_dll.append("\\");
     }
-    QTimer::singleShot(0, this, [=]() {
-        // findwnd seer ->
-        if (auto h
-            = FindWindowEx(nullptr, nullptr, L"SeerWindowClass", nullptr)) {
-            sendMsg2Seer(SEER_OIT_SUB_LOAD_OK, {}, h);
-        }
-        else {
-            std::cout << "FindWindowEx NULL \n";
+    auto thread     = new Thread;
+    QPointer worker = new DLLLoaderWorker(dir_dll);
+    connect(this, &QObject::destroyed, [worker]() {
+        if (worker) {
+            qprintt << "ui destroyed, stopping thread";
+            worker->m_stop.store(true);
         }
     });
-    return true;
+    connect(worker, &DLLLoaderWorker::sigFinished, worker,
+            &QObject::deleteLater);
+    connect(worker, &QObject::destroyed, thread, &QObject::deleteLater);
+    //
+    connect(worker, &DLLLoaderWorker::sigFinished, this,
+            &OITViewer::onDllLoaded);
+    connect(thread, &QThread::started, worker, &DLLLoaderWorker::process);
+    worker->moveToThread(thread);
+    thread->start();
 }
 
-bool OITViewer::createViewer()
+void OITViewer::onDllLoaded(HMODULE lib)
 {
-    std::cout << "createViewer \n";
-    // If the class is something else,
-    // it will call DefWindowProc for default message processing.
-    m_viewer = CreateWindow(L"SCCVIEWER", L"OIT_Viewer",
-                            WS_CHILD | WS_OVERLAPPED | WS_CLIPCHILDREN, 0, 0, 0,
-                            0, (HWND)winId(), 0, GetModuleHandle(NULL), NULL);
-    if (m_viewer == nullptr) {
-        std::cout << "createViewer NULL \n";
-        return false;
+    qprintt << "onDllLoaded" << lib;
+    if (!lib) {
+        emit sigCommand(ViewCommandType::VCT_StateChange, VCV_Error);
+        return;
     }
-    return true;
-}
+    m_lib    = lib;
+    m_viewer = CreateWindow(
+        L"SCCVIEWER", L"OIT_Viewer", WS_CHILD | WS_OVERLAPPED | WS_CLIPCHILDREN,
+        0, 0, 0, 0, (HWND)m_container->winId(), 0, GetModuleHandle(NULL), NULL);
+    if (!m_viewer) {
+        qprintt << "CreateViewer Err" << GetLastError();
+        emit sigCommand(ViewCommandType::VCT_StateChange, VCV_Error);
+        return;
+    }
+    if (!viewFile(m_d->d->path)) {
+        qprintt << "ViewFile Err";
+        emit sigCommand(ViewCommandType::VCT_StateChange, VCV_Error);
+        return;
+    }
 
-void OITViewer::doResize(const QSize &sz) const
-{
-    if (m_viewer && IsWindow(m_viewer)) {
-        InvalidateRect(m_viewer, NULL, 0);
-        MoveWindow(m_viewer, 0, 0, sz.width(), sz.height(), TRUE);
-        ShowWindow(m_viewer, SW_SHOW);
-        std::cout << "resized " << sz.width() << " " << sz.height() << '\n';
-    }
+    emit sigCommand(ViewCommandType::VCT_StateChange, VCV_Loaded);
+    QTimer::singleShot(0, this, &OITViewer::doResize);
 }
 
 bool OITViewer::viewFile(const QString &p)
 {
-    std::cout << "viewFile" << '\n';
+    qprintt << "viewFile";
     if (!IsWindow(m_viewer)) {
-        std::cout << "viewFile IsWindow" << '\n';
+        qprintt << "viewFile IsWindow";
         return false;
     }
 
@@ -117,39 +155,33 @@ bool OITViewer::viewFile(const QString &p)
     lvf.dwReserved2     = 0;
     const auto ret = SendMessage(m_viewer, SCCVW_VIEWFILE, 0, (LPARAM)&lvf);
     if (SCCVWERR_OK != ret) {
-        std::cout << "viewFile err " << ret << '\n';
+        qprintt << "viewFile err " << ret;
         return false;
     }
-    doResize(size());
     return true;
 }
 
-void OITViewer::sendMsg2Seer(int sub_type, const QByteArray &d, HWND h) const
+void OITViewer::doResize()
 {
-    std::cout << "sendMsg2Seer " << m_wnd_index << " " << sub_type << '\n';
+    if (!m_viewer || !IsWindow(m_viewer) || !m_container) {
+        return;
+    }
+    RECT rt;
+    if (!GetClientRect((HWND)m_container->winId(), &rt)) {
+        qprintt << "doResize: GetClientRect error";
+        return;
+    }
 
-    auto hwnd_parent = GetAncestor(h, GA_ROOT);
-
-    QByteArray ba;
-    QDataStream ds(&ba, QIODevice::WriteOnly);
-    ds.setVersion(QDataStream::Qt_5_15);
-    OITData oitd{sub_type, m_wnd_index, d};
-    ds << oitd;
-
-    COPYDATASTRUCT cd;
-    cd.cbData = ba.size();
-    cd.lpData = (void *)ba.data();
-    cd.dwData = SEER_OIT_MSG;
-    SendMessage(hwnd_parent, WM_COPYDATA, 0, (LPARAM)(LPVOID)&cd);
+    InvalidateRect(m_viewer, NULL, 0);
+    MoveWindow(m_viewer, 0, 0, rt.right - rt.left, rt.bottom - rt.top, TRUE);
+    ShowWindow(m_viewer, SW_SHOW);
+    qprintt << "doResize" << rt.right - rt.left << rt.bottom - rt.top;
 }
 
-QVariant OITViewer::getDataFromSeerMsg(const QByteArray &ba) const
+void OITViewer::resizeEvent(QResizeEvent *event)
 {
-    QDataStream ds(ba);
-    ds.setVersion(QDataStream::Qt_5_15);
-    QVariant v;
-    ds >> v;
-    return v;
+    ViewerBase::resizeEvent(event);
+    doResize();
 }
 
 bool OITViewer::nativeEvent(const QByteArray &ba, void *msg, qintptr *result)
@@ -230,177 +262,62 @@ bool OITViewer::nativeEvent(const QByteArray &ba, void *msg, qintptr *result)
             p = "Unknown Error!";
             break;
         }
-        std::cout << "file viewing has stopped " << p.toStdString() << '\n';
-
+        qprintt << "file viewing has stopped" << p;
         *result = -1;
-        sendMsg2Seer(SEER_OIT_SUB_LOAD_ERR, {}, m->hwnd);
-        return true;
-    }
-    case SCCVW_KEYDOWN: {
-        if (auto key = translateKey(m->lParam)) {
-            int mod = 0;
-            if (0xF0 & GetKeyState(VK_CONTROL)) {
-                mod += Qt::CTRL;
-            }
-            if (0xF0 & GetKeyState(VK_SHIFT)) {
-                mod += Qt::SHIFT;
-            }
-            if (0xF0 & GetKeyState(VK_MENU)) {
-                mod += Qt::ALT;
-            }
 
-            // KBDLLHOOKSTRUCT key = *((KBDLLHOOKSTRUCT *)m->lParam);
-            QKeySequence ks(mod + key);
-            if (ks.matches(QKeySequence::Copy)) {
-                auto p = SendMessage(m_viewer, SCCVW_COPYTOCLIP, 0, 0L);
-                std::cout << "KEYDOWN copy " << p << '\n';
-            }
-            else {
-                QByteArray ba;
-                QDataStream ds(&ba, QIODevice::WriteOnly);
-                ds.setVersion(QDataStream::Qt_5_15);
-                ds << (mod + key);
-                sendMsg2Seer(SEER_OIT_SUB_KEY_PRESS, ba, m->hwnd);
-            }
-        }
-        break;
-    }
-    case WM_COPYDATA: {
-        auto cds = (PCOPYDATASTRUCT)m->lParam;
-        if (!cds) {
-            break;
-        }
-        if (cds->dwData == QEvent::Quit) {
-            QTimer::singleShot(0, qApp, &QCoreApplication::quit);
-        }
-        else if (cds->dwData == SEER_OIT_SIZE_CHANGED) {
-            const QVariant v = getDataFromSeerMsg(
-                QByteArray(reinterpret_cast<char *>(cds->lpData), cds->cbData));
-            const QSize sz = v.toSize();
-            std::cout << "SEER_OIT_SIZE_CHANGED " << sz.width() << " "
-                      << sz.height() << '\n';
-            if (sz.isValid()) {
-                doResize(sz);
-            }
-            else {
-                doResize(size());
-            }
-        }
-        break;
+        emit sigCommand(ViewCommandType::VCT_StateChange, VCV_Error);
+        return true;
     }
     }
     return QWidget::nativeEvent(ba, msg, result);
 }
 
-int OITViewer::translateKey(int key)
+QString OITViewer::getDLLPath()
 {
-    // QxtGlobalShortcutPrivate::nativeKeycode(Qt::Key key)
-    switch (key) {
-    case VK_ESCAPE:
-        return Qt::Key_Escape;
-    case VK_TAB:
-        // case Qt::Key_Backtab:
-        return Qt::Key_Tab;
-    case VK_BACK:
-        return Qt::Key_Backspace;
-    case VK_RETURN:
-        // case Qt::Key_Return:
-        return Qt::Key_Enter;
-    case VK_INSERT:
-        return Qt::Key_Insert;
-    case VK_DELETE:
-        return Qt::Key_Delete;
-    case VK_PAUSE:
-        return Qt::Key_Pause;
-    case VK_PRINT:
-        return Qt::Key_Print;
-    case VK_CLEAR:
-        return Qt::Key_Clear;
-    case VK_HOME:
-        return Qt::Key_Home;
-    case VK_END:
-        return Qt::Key_End;
-    case VK_LEFT:
-        return Qt::Key_Left;
-    case VK_UP:
-        return Qt::Key_Up;
-    case VK_RIGHT:
-        return Qt::Key_Right;
-    case VK_DOWN:
-        return Qt::Key_Down;
-    case VK_PRIOR:
-        return Qt::Key_PageUp;
-    case VK_NEXT:
-        return Qt::Key_PageDown;
-    case VK_F1:
-        return Qt::Key_F1;
-    case VK_F2:
-        return Qt::Key_F2;
-    case VK_F3:
-        return Qt::Key_F3;
-    case VK_F4:
-        return Qt::Key_F4;
-    case VK_F5:
-        return Qt::Key_F5;
-    case VK_F6:
-        return Qt::Key_F6;
-    case VK_F7:
-        return Qt::Key_F7;
-    case VK_F8:
-        return Qt::Key_F8;
-    case VK_F9:
-        return Qt::Key_F9;
-    case VK_F10:
-        return Qt::Key_F10;
-    case VK_F11:
-        return Qt::Key_F11;
-    case VK_F12:
-        return Qt::Key_F12;
-    case VK_F13:
-        return Qt::Key_F13;
-    case VK_F14:
-        return Qt::Key_F14;
-    case VK_F15:
-        return Qt::Key_F15;
-    case VK_F16:
-        return Qt::Key_F16;
-    case VK_F17:
-        return Qt::Key_F17;
-    case VK_F18:
-        return Qt::Key_F18;
-    case VK_F19:
-        return Qt::Key_F19;
-    case VK_F20:
-        return Qt::Key_F20;
-    case VK_F21:
-        return Qt::Key_F21;
-    case VK_F22:
-        return Qt::Key_F22;
-    case VK_F23:
-        return Qt::Key_F23;
-    case VK_F24:
-        return Qt::Key_F24;
-    case VK_SPACE:
-        return Qt::Key_Space;
-    case VK_MULTIPLY:
-        return Qt::Key_Asterisk;
-    case VK_ADD:
-        return Qt::Key_Plus;
-    case VK_SEPARATOR:
-        return Qt::Key_Comma;
-    case VK_SUBTRACT:
-        return Qt::Key_Minus;
-    case VK_DIVIDE:
-        return Qt::Key_Slash;
-    }
+    MEMORY_BASIC_INFORMATION mbi = {};
+    VirtualQuery((void *)getDLLPath, &mbi, sizeof(mbi));
+    HMODULE hm = (HMODULE)mbi.AllocationBase;
 
-    // numbers
-    if (key >= Qt::Key_0 && key <= Qt::Key_9) {
-        return key;
+    QString dir;
+    TCHAR path[MAX_PATH] = {};
+    if (hm && GetModuleFileName(hm, path, MAX_PATH)) {
+        dir = QString::fromWCharArray(path);
+        dir = QFileInfo(dir).absoluteDir().absolutePath();
     }
-    // letters
-    if (key >= Qt::Key_A && key <= Qt::Key_Z) {
-        return key;
+    else {
+        qprintt << "GetModuleFileName" << GetLastError();
     }
-    return 0;
+    return dir;
+}
+
+//////////////////////////////
+DLLLoaderWorker::DLLLoaderWorker(const QString &dir) : m_stop(false), m_dir(dir)
+{
+    qprintt << this;
+}
+
+DLLLoaderWorker::~DLLLoaderWorker()
+{
+    qprintt << "~" << this;
+}
+
+void DLLLoaderWorker::process()
+{
+    if (m_stop.load()) {
+        qprintt << "DLLLoaderWorker::process quit early";
+        emit sigFinished(nullptr);
+        return;
+    }
+    HMODULE lib = SCCLoadViewerDLL((wchar_t *)m_dir.utf16());
+    if (m_stop.load()) {
+        if (lib) {
+            FreeLibrary(lib);
+        }
+        emit sigFinished(nullptr);
+        return;
+    }
+    if (!lib) {
+        qprintt << "SCCLoadViewerDLL failed" << m_dir;
+    }
+    emit sigFinished(lib);
 }

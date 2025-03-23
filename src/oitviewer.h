@@ -2,38 +2,64 @@
 
 #include <qt_windows.h>
 
-#include <QWidget>
+#include <atomic>
+
+#include "seer/viewerbase.h"
 
 namespace Ui {
 class OITViewer;
 }
 
-class OITViewer : public QWidget {
+class OITViewer : public ViewerBase {
     Q_OBJECT
-
+    Q_PLUGIN_METADATA(IID ViewerBase_iid FILE "officeviewer.json")
+    Q_INTERFACES(ViewerBase)
 public:
-    static int translateKey(int key);
-
-    explicit OITViewer(int wnd_index, QString p, QWidget *parent = nullptr);
+    explicit OITViewer(QWidget *parent = nullptr);
     ~OITViewer() override;
 
-    bool init();
+    QString name() const override
+    {
+        return "OfficeViewer";
+    }
+    QSize getContentSize() const override;
+
+    static QString getDLLPath();
 
 protected:
+    void loadImpl(QBoxLayout *layout_content,
+                  QHBoxLayout *layout_control_bar) override;
+
     bool nativeEvent(const QByteArray &ba, void *msg, qintptr *result) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
-    bool createViewer();
-    void doResize(const QSize &sz) const;
+    void asyncInit();
+    void onDllLoaded(HMODULE lib);
+    void doResize();
     bool viewFile(const QString &p);
 
-    void sendMsg2Seer(int sub_type, const QByteArray &d, HWND h) const;
-    QVariant getDataFromSeerMsg(const QByteArray &ba) const;
+    QWidget *m_container;
 
     HWND m_viewer;
     HANDLE m_lib;
-    const int m_wnd_index;
-    const QString m_path;
 
     Ui::OITViewer *ui;
+};
+
+//////////////////////////////////
+class DLLLoaderWorker : public QObject {
+    Q_OBJECT
+public:
+    DLLLoaderWorker(const QString &dir);
+
+    ~DLLLoaderWorker() override;
+
+    void process();
+    Q_SIGNAL void sigFinished(HMODULE lib);
+
+    std::atomic<bool> m_stop;
+
+private:
+    const QString m_dir;
 };
