@@ -5,7 +5,6 @@
 #include <QResizeEvent>
 #include <QStandardPaths>
 #include <QThread>
-#include <QTimer>
 
 #include "sccvw.h"
 #include "ui_oitviewer.h"
@@ -15,6 +14,10 @@
 #include "scclink.c"
 
 #define qprintt qDebug() << "[officeviewer]"
+LRESULT CALLBACK ViewerWndProc(HWND hwnd,
+                               UINT msg,
+                               WPARAM wParam,
+                               LPARAM lParam);
 
 class Thread : public QThread {
     using QThread::run;
@@ -31,6 +34,7 @@ public:
 OITViewer::OITViewer(QWidget *parent)
     : ViewerBase(parent),
       m_container(nullptr),
+      m_layout(nullptr),
       m_viewer(nullptr),
       m_lib(nullptr),
       ui(new Ui::OITViewer)
@@ -46,10 +50,12 @@ OITViewer::OITViewer(QWidget *parent)
     qputenv("OIT_DATA_PATH", QStandardPaths::writableLocation(
                                  QStandardPaths::AppLocalDataLocation)
                                  .toUtf8());
+    qprintt << this;
 }
 
 OITViewer::~OITViewer()
 {
+    qprintt << "~" << this;
     if (m_viewer) {
         SendMessage(m_viewer, SCCVW_CLOSEFILE, 0, 0L);
     }
@@ -64,16 +70,31 @@ QSize OITViewer::getContentSize() const
     return m_d->d->dpr * QSize(800, 700);
 }
 
+void OITViewer::updateDPR(qreal r)
+{
+    m_d->d->dpr = r;
+    if (m_layout) {
+        m_layout->setContentsMargins(r * 9, r * 9, r * 9, r * 9);
+    }
+}
+
 void OITViewer::loadImpl(QBoxLayout *layout_content,
                          QHBoxLayout *layout_control_bar)
 {
     if (layout_control_bar) {
         layout_control_bar->addStretch();
     }
+    m_layout    = layout_content;
     m_container = new QWidget(this);
     m_container->setAttribute(Qt::WA_DontCreateNativeAncestors, true);
     m_container->setAttribute(Qt::WA_NativeWindow, true);
     layout_content->addWidget(m_container);
+
+    updateDPR(m_d->d->dpr);
+    m_timer_resize.setSingleShot(true);
+    m_timer_resize.setInterval(200);
+    connect(&m_timer_resize, &QTimer::timeout, this, &OITViewer::doResize);
+
     asyncInit();
 }
 
@@ -115,15 +136,24 @@ void OITViewer::onDllLoaded(HMODULE lib)
         emit sigCommand(ViewCommandType::VCT_StateChange, VCV_Error);
         return;
     }
-    m_lib    = lib;
-    m_viewer = CreateWindow(
-        L"SCCVIEWER", L"OIT_Viewer", WS_CHILD | WS_OVERLAPPED | WS_CLIPCHILDREN,
-        0, 0, 0, 0, (HWND)m_container->winId(), 0, GetModuleHandle(NULL), NULL);
+    m_lib                        = lib;
+    MEMORY_BASIC_INFORMATION mbi = {};
+    VirtualQuery((void *)getDLLPath, &mbi, sizeof(mbi));
+    m_viewer = CreateWindow(L"SCCVIEWER", L"OIT_Viewer",
+                            WS_CHILD | WS_OVERLAPPED | WS_CLIPCHILDREN, 0, 0, 0,
+                            0, (HWND)m_container->winId(), 0,
+                            (HMODULE)mbi.AllocationBase, NULL);
     if (!m_viewer) {
         qprintt << "CreateViewer Err" << GetLastError();
         emit sigCommand(ViewCommandType::VCT_StateChange, VCV_Error);
         return;
     }
+
+    LONG_PTR origProc = GetWindowLongPtr(m_viewer, GWLP_WNDPROC);
+    SetWindowLongPtr(m_viewer, GWLP_USERDATA, origProc);
+    SetWindowLongPtr(m_viewer, GWLP_WNDPROC, (LONG_PTR)ViewerWndProc);
+
+    // SendMessage(m_viewer, SCCVW_SETOPTION)
     if (!viewFile(m_d->d->path)) {
         qprintt << "ViewFile Err";
         emit sigCommand(ViewCommandType::VCT_StateChange, VCV_Error);
@@ -181,25 +211,27 @@ void OITViewer::doResize()
 void OITViewer::resizeEvent(QResizeEvent *event)
 {
     ViewerBase::resizeEvent(event);
-    doResize();
+    // doResize();
+    m_timer_resize.start();
 }
 
-bool OITViewer::nativeEvent(const QByteArray &ba, void *msg, qintptr *result)
+LRESULT CALLBACK ViewerWndProc(HWND hwnd,
+                               UINT msg,
+                               WPARAM wParam,
+                               LPARAM lParam)
 {
-    MSG *m = (MSG *)msg;
-    switch (m->message) {
+    switch (msg) {
     case SCCVW_CONTEXTMENU: {
         // return 0, the Viewer will pop up its own context menu.
         // If the return value is anything but 0, the Viewer does nothing.
-        *result = -1;
         // if you want to stop the event being handled by Qt,
         // return true and set result.
-        return true;
+        return 0;
     }
     case SCCVW_BAILOUT: {
         // file viewing has stopped
         QString p;
-        switch ((DWORD)m->lParam) {
+        switch (lParam) {
         case SCCVW_BAILOUT_MEMORY:
             p = "Memory Failure!";
             break;
@@ -263,13 +295,24 @@ bool OITViewer::nativeEvent(const QByteArray &ba, void *msg, qintptr *result)
             break;
         }
         qprintt << "file viewing has stopped" << p;
-        *result = -1;
 
-        emit sigCommand(ViewCommandType::VCT_StateChange, VCV_Error);
-        return true;
+        // emit sigCommand(ViewCommandType::VCT_StateChange, VCV_Error);
+        break;
+    }
+    case SCCVW_KEYDOWN: {
+        bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000);
+        if (ctrl && lParam == 'C') {
+            // hwnd == m_viewer
+            SendMessage(hwnd, SCCVW_COPYTOCLIP, 0, 0L);
+        }
+        break;
     }
     }
-    return QWidget::nativeEvent(ba, msg, result);
+
+    if (WNDPROC origProc = (WNDPROC)GetWindowLongPtr(hwnd, GWLP_USERDATA)) {
+        return CallWindowProc(origProc, hwnd, msg, wParam, lParam);
+    }
+    return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
 QString OITViewer::getDLLPath()

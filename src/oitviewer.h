@@ -2,6 +2,7 @@
 
 #include <qt_windows.h>
 
+#include <QTimer>
 #include <atomic>
 
 #include "seer/viewerbase.h"
@@ -23,6 +24,7 @@ public:
         return "OfficeViewer";
     }
     QSize getContentSize() const override;
+    void updateDPR(qreal) override;
 
     static QString getDLLPath();
 
@@ -30,7 +32,6 @@ protected:
     void loadImpl(QBoxLayout *layout_content,
                   QHBoxLayout *layout_control_bar) override;
 
-    bool nativeEvent(const QByteArray &ba, void *msg, qintptr *result) override;
     void resizeEvent(QResizeEvent *event) override;
 
 private:
@@ -40,9 +41,12 @@ private:
     bool viewFile(const QString &p);
 
     QWidget *m_container;
+    QBoxLayout *m_layout;
 
     HWND m_viewer;
     HANDLE m_lib;
+
+    QTimer m_timer_resize;
 
     Ui::OITViewer *ui;
 };
