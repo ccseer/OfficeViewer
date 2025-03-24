@@ -7,13 +7,11 @@ CONFIG += plugin
 TARGET_EXT = .dll
 # SOURCES += src/test.cpp
 
+# src
 SOURCES += \
-    $$PWD/src/oitviewer.cpp
-
+    $$PWD/src/officeviewer.cpp
 HEADERS += \
-    $$PWD/src/oitviewer.h
-
-FORMS +=  $$PWD/src/oitviewer.ui
+    $$PWD/src/officeviewer.h
 DISTFILES += $$PWD/src/officeviewer.json
 
 # oit

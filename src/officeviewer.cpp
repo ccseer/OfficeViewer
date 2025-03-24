@@ -1,4 +1,4 @@
-#include "oitviewer.h"
+#include "officeviewer.h"
 
 #include <QDir>
 #include <QPointer>
@@ -7,7 +7,6 @@
 #include <QThread>
 
 #include "sccvw.h"
-#include "ui_oitviewer.h"
 
 #pragma comment(lib, "user32.lib")
 // need to be included below sccvw.h
@@ -31,15 +30,13 @@ public:
     }
 };
 
-OITViewer::OITViewer(QWidget *parent)
+OfficeViewer::OfficeViewer(QWidget *parent)
     : ViewerBase(parent),
       m_container(nullptr),
       m_layout(nullptr),
       m_viewer(nullptr),
-      m_lib(nullptr),
-      ui(new Ui::OITViewer)
+      m_lib(nullptr)
 {
-    ui->setupUi(this);
     // a.setOrganizationName("Corey");
     // a.setApplicationName("Seer");
     // a.setOrganizationDomain("https://1218.io");
@@ -53,24 +50,25 @@ OITViewer::OITViewer(QWidget *parent)
     qprintt << this;
 }
 
-OITViewer::~OITViewer()
+OfficeViewer::~OfficeViewer()
 {
     qprintt << "~" << this;
     if (m_viewer) {
         SendMessage(m_viewer, SCCVW_CLOSEFILE, 0, 0L);
+        DestroyWindow(m_viewer);
+        m_viewer = 0;
     }
     if (m_lib) {
         FreeLibrary((HMODULE)m_lib);
     }
-    delete ui;
 }
 
-QSize OITViewer::getContentSize() const
+QSize OfficeViewer::getContentSize() const
 {
     return m_d->d->dpr * QSize(800, 700);
 }
 
-void OITViewer::updateDPR(qreal r)
+void OfficeViewer::updateDPR(qreal r)
 {
     m_d->d->dpr = r;
     if (m_layout) {
@@ -78,8 +76,8 @@ void OITViewer::updateDPR(qreal r)
     }
 }
 
-void OITViewer::loadImpl(QBoxLayout *layout_content,
-                         QHBoxLayout *layout_control_bar)
+void OfficeViewer::loadImpl(QBoxLayout *layout_content,
+                            QHBoxLayout *layout_control_bar)
 {
     if (layout_control_bar) {
         layout_control_bar->addStretch();
@@ -93,12 +91,12 @@ void OITViewer::loadImpl(QBoxLayout *layout_content,
     updateDPR(m_d->d->dpr);
     m_timer_resize.setSingleShot(true);
     m_timer_resize.setInterval(200);
-    connect(&m_timer_resize, &QTimer::timeout, this, &OITViewer::doResize);
+    connect(&m_timer_resize, &QTimer::timeout, this, &OfficeViewer::doResize);
 
     asyncInit();
 }
 
-void OITViewer::asyncInit()
+void OfficeViewer::asyncInit()
 {
     QString dir_dll = getDLLPath();
     if (dir_dll.isEmpty()) {
@@ -111,25 +109,23 @@ void OITViewer::asyncInit()
         dir_dll.append("\\");
     }
     auto thread     = new Thread;
-    QPointer worker = new DLLLoaderWorker(dir_dll);
+    QPointer worker = new DllLoader(dir_dll);
     connect(this, &QObject::destroyed, [worker]() {
         if (worker) {
             qprintt << "ui destroyed, stopping thread";
             worker->m_stop.store(true);
         }
     });
-    connect(worker, &DLLLoaderWorker::sigFinished, worker,
-            &QObject::deleteLater);
+    connect(worker, &DllLoader::sigFinished, worker, &QObject::deleteLater);
     connect(worker, &QObject::destroyed, thread, &QObject::deleteLater);
     //
-    connect(worker, &DLLLoaderWorker::sigFinished, this,
-            &OITViewer::onDllLoaded);
-    connect(thread, &QThread::started, worker, &DLLLoaderWorker::process);
+    connect(worker, &DllLoader::sigFinished, this, &OfficeViewer::onDllLoaded);
+    connect(thread, &QThread::started, worker, &DllLoader::process);
     worker->moveToThread(thread);
     thread->start();
 }
 
-void OITViewer::onDllLoaded(HMODULE lib)
+void OfficeViewer::onDllLoaded(HMODULE lib)
 {
     qprintt << "onDllLoaded" << lib;
     if (!lib) {
@@ -139,10 +135,11 @@ void OITViewer::onDllLoaded(HMODULE lib)
     m_lib                        = lib;
     MEMORY_BASIC_INFORMATION mbi = {};
     VirtualQuery((void *)getDLLPath, &mbi, sizeof(mbi));
-    m_viewer = CreateWindow(L"SCCVIEWER", L"OIT_Viewer",
-                            WS_CHILD | WS_OVERLAPPED | WS_CLIPCHILDREN, 0, 0, 0,
-                            0, (HWND)m_container->winId(), 0,
-                            (HMODULE)mbi.AllocationBase, NULL);
+    m_viewer = CreateWindow(
+        L"SCCVIEWER", L"OIT_Viewer", WS_CHILD | WS_OVERLAPPED | WS_CLIPCHILDREN,
+        0, 0, 0, 0, (HWND)m_container->winId(), 0, (HMODULE)mbi.AllocationBase,
+        // GetModuleHandle(nullptr),
+        NULL);
     if (!m_viewer) {
         qprintt << "CreateViewer Err" << GetLastError();
         emit sigCommand(ViewCommandType::VCT_StateChange, VCV_Error);
@@ -161,10 +158,10 @@ void OITViewer::onDllLoaded(HMODULE lib)
     }
 
     emit sigCommand(ViewCommandType::VCT_StateChange, VCV_Loaded);
-    QTimer::singleShot(0, this, &OITViewer::doResize);
+    QTimer::singleShot(0, this, &OfficeViewer::doResize);
 }
 
-bool OITViewer::viewFile(const QString &p)
+bool OfficeViewer::viewFile(const QString &p)
 {
     qprintt << "viewFile";
     if (!IsWindow(m_viewer)) {
@@ -191,7 +188,7 @@ bool OITViewer::viewFile(const QString &p)
     return true;
 }
 
-void OITViewer::doResize()
+void OfficeViewer::doResize()
 {
     if (!m_viewer || !IsWindow(m_viewer) || !m_container) {
         return;
@@ -208,7 +205,7 @@ void OITViewer::doResize()
     qprintt << "doResize" << rt.right - rt.left << rt.bottom - rt.top;
 }
 
-void OITViewer::resizeEvent(QResizeEvent *event)
+void OfficeViewer::resizeEvent(QResizeEvent *event)
 {
     ViewerBase::resizeEvent(event);
     // doResize();
@@ -315,7 +312,7 @@ LRESULT CALLBACK ViewerWndProc(HWND hwnd,
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
-QString OITViewer::getDLLPath()
+QString OfficeViewer::getDLLPath()
 {
     MEMORY_BASIC_INFORMATION mbi = {};
     VirtualQuery((void *)getDLLPath, &mbi, sizeof(mbi));
@@ -333,18 +330,18 @@ QString OITViewer::getDLLPath()
     return dir;
 }
 
-//////////////////////////////
-DLLLoaderWorker::DLLLoaderWorker(const QString &dir) : m_stop(false), m_dir(dir)
+//////////////////////////////////////////////////////////////////////
+DllLoader::DllLoader(const QString &dir) : m_stop(false), m_dir(dir)
 {
     qprintt << this;
 }
 
-DLLLoaderWorker::~DLLLoaderWorker()
+DllLoader::~DllLoader()
 {
     qprintt << "~" << this;
 }
 
-void DLLLoaderWorker::process()
+void DllLoader::process()
 {
     if (m_stop.load()) {
         qprintt << "DLLLoaderWorker::process quit early";

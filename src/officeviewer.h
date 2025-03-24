@@ -7,17 +7,13 @@
 
 #include "seer/viewerbase.h"
 
-namespace Ui {
-class OITViewer;
-}
-
-class OITViewer : public ViewerBase {
+class OfficeViewer : public ViewerBase {
     Q_OBJECT
     Q_PLUGIN_METADATA(IID ViewerBase_iid FILE "officeviewer.json")
     Q_INTERFACES(ViewerBase)
 public:
-    explicit OITViewer(QWidget *parent = nullptr);
-    ~OITViewer() override;
+    explicit OfficeViewer(QWidget *parent = nullptr);
+    ~OfficeViewer() override;
 
     QString name() const override
     {
@@ -47,17 +43,15 @@ private:
     HANDLE m_lib;
 
     QTimer m_timer_resize;
-
-    Ui::OITViewer *ui;
 };
 
 //////////////////////////////////
-class DLLLoaderWorker : public QObject {
+class DllLoader : public QObject {
     Q_OBJECT
 public:
-    DLLLoaderWorker(const QString &dir);
+    DllLoader(const QString &dir);
 
-    ~DLLLoaderWorker() override;
+    ~DllLoader() override;
 
     void process();
     Q_SIGNAL void sigFinished(HMODULE lib);
