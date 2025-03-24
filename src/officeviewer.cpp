@@ -135,11 +135,10 @@ void OfficeViewer::onDllLoaded(HMODULE lib)
     m_lib                        = lib;
     MEMORY_BASIC_INFORMATION mbi = {};
     VirtualQuery((void *)getDLLPath, &mbi, sizeof(mbi));
-    m_viewer = CreateWindow(
-        L"SCCVIEWER", L"OIT_Viewer", WS_CHILD | WS_OVERLAPPED | WS_CLIPCHILDREN,
-        0, 0, 0, 0, (HWND)m_container->winId(), 0, (HMODULE)mbi.AllocationBase,
-        // GetModuleHandle(nullptr),
-        NULL);
+    m_viewer = CreateWindow(L"SCCVIEWER", L"OIT_Viewer",
+                            WS_CHILD | WS_OVERLAPPED | WS_CLIPCHILDREN, 0, 0, 0,
+                            0, (HWND)m_container->winId(), 0,
+                            (HMODULE)mbi.AllocationBase, NULL);
     if (!m_viewer) {
         qprintt << "CreateViewer Err" << GetLastError();
         emit sigCommand(ViewCommandType::VCT_StateChange, VCV_Error);
