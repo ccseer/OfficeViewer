@@ -1,0 +1,43 @@
+{
+    "name": "OfficeViewer",
+    "version": "1.4.0",
+    "type": "dll",
+    "roles": [
+        "viewer"
+    ],
+    "entry": "officeviewer.dll",
+    "args": [],
+    "formats": [
+        "123",
+        "cdr",
+        "doc",
+        "docx",
+        "drw",
+        "dwg",
+        "dxf",
+        "eml",
+        "mdb",
+        "mpp",
+        "msg",
+        "odp",
+        "ods",
+        "odt",
+        "pct",
+        "ppt",
+        "pptx",
+        "prz",
+        "pst",
+        "qpw",
+        "rtf",
+        "shw",
+        "uue",
+        "vsd",
+        "wpd",
+        "xls",
+        "xlsm",
+        "xlsx"
+    ],
+    "appMinVersion": "3.9.10",
+    "author": "corey",
+    "releaseDate": "2025-03-27"
+}
