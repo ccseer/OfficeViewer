@@ -9,3 +9,4 @@
 
 ### TODO:
 - add `dotx`, `dotm`, and `xltm`
+- read size from json config
