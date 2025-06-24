@@ -10,3 +10,4 @@
 ### TODO:
 - add `dotx`, `dotm`, and `xltm`
 - read size from json config
+- <kbd>Esc/Ctrl+W</kbd> key to close the preview window
