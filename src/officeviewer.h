@@ -9,20 +9,22 @@
 
 class OfficeViewer : public ViewerBase {
     Q_OBJECT
-    Q_PLUGIN_METADATA(IID ViewerBase_iid FILE "officeviewer.json")
+    Q_PLUGIN_METADATA(IID ViewerBase_iid FILE "../bin/plugin.json")
     Q_INTERFACES(ViewerBase)
 public:
     explicit OfficeViewer(QWidget *parent = nullptr);
     ~OfficeViewer() override;
 
+    ViewerBase *createViewer(QWidget *parent = nullptr) override
+    {
+        return new OfficeViewer(parent);
+    }
     QString name() const override
     {
         return "OfficeViewer";
     }
     QSize getContentSize() const override;
     void updateDPR(qreal) override;
-
-    static QString getDLLPath();
 
 protected:
     void loadImpl(QBoxLayout *layout_content,

@@ -2,17 +2,17 @@ QT       += core gui widgets
 TARGET  = officeviewer
 CONFIG += c++17
 
-TEMPLATE = lib
-CONFIG += plugin
-TARGET_EXT = .dll
-# SOURCES += src/test.cpp
+# TEMPLATE = lib
+# CONFIG += plugin
+# TARGET_EXT = .dll
+SOURCES += src/test.cpp
 
 # src
 SOURCES += \
     $$PWD/src/officeviewer.cpp
 HEADERS += \
     $$PWD/src/officeviewer.h
-DISTFILES += $$PWD/src/officeviewer.json
+DISTFILES += $$PWD/bin/plugin.json
 
 # oit
 INCLUDEPATH+= $$PWD/sdk/common
@@ -21,6 +21,7 @@ INCLUDEPATH+= $$PWD/sdk/common
 INCLUDEPATH += $$PWD/Seer-sdk/
 HEADERS += \
     Seer-sdk/seer/viewerbase.h \
+    Seer-sdk/seer/viewer_helper.h \
     Seer-sdk/seer/viewoption.h
 
 

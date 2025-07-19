@@ -7,6 +7,7 @@
 #include <QThread>
 
 #include "sccvw.h"
+#include "seer/viewer_helper.h"
 
 #pragma comment(lib, "user32.lib")
 // need to be included below sccvw.h
@@ -98,7 +99,7 @@ void OfficeViewer::loadImpl(QBoxLayout *layout_content,
 
 void OfficeViewer::asyncInit()
 {
-    QString dir_dll = getDLLPath();
+    QString dir_dll = seer::getDLLPath();
     if (dir_dll.isEmpty()) {
         qprintt << "dir dll";
         emit sigCommand(ViewCommandType::VCT_StateChange, VCV_Error);
@@ -134,7 +135,7 @@ void OfficeViewer::onDllLoaded(HMODULE lib)
     }
     m_lib                        = lib;
     MEMORY_BASIC_INFORMATION mbi = {};
-    VirtualQuery((void *)getDLLPath, &mbi, sizeof(mbi));
+    VirtualQuery((void *)seer::getDLLPath, &mbi, sizeof(mbi));
     m_viewer = CreateWindow(L"SCCVIEWER", L"OIT_Viewer",
                             WS_CHILD | WS_OVERLAPPED | WS_CLIPCHILDREN, 0, 0, 0,
                             0, (HWND)m_container->winId(), 0,
@@ -167,9 +168,9 @@ bool OfficeViewer::viewFile(const QString &p)
         qprintt << "viewFile IsWindow";
         return false;
     }
-
-    SCCVWVIEWFILE40 lvf = {};
-    lvf.dwSize          = sizeof(SCCVWVIEWFILE40);
+    // only the SCCVWVIEWFILE80 structure is truly intended to accept Unicode.
+    SCCVWVIEWFILE80 lvf = {};
+    lvf.dwSize          = sizeof(SCCVWVIEWFILE80);
     // IMPORTANT
     lvf.dwSpecType      = IOTYPE_UNICODEPATH;
     lvf.pSpec           = (VTVOID *)(wchar_t *)p.utf16();
@@ -309,24 +310,6 @@ LRESULT CALLBACK ViewerWndProc(HWND hwnd,
         return CallWindowProc(origProc, hwnd, msg, wParam, lParam);
     }
     return DefWindowProc(hwnd, msg, wParam, lParam);
-}
-
-QString OfficeViewer::getDLLPath()
-{
-    MEMORY_BASIC_INFORMATION mbi = {};
-    VirtualQuery((void *)getDLLPath, &mbi, sizeof(mbi));
-    HMODULE hm = (HMODULE)mbi.AllocationBase;
-
-    QString dir;
-    TCHAR path[MAX_PATH] = {};
-    if (hm && GetModuleFileName(hm, path, MAX_PATH)) {
-        dir = QString::fromWCharArray(path);
-        dir = QFileInfo(dir).absoluteDir().absolutePath();
-    }
-    else {
-        qprintt << "GetModuleFileName" << GetLastError();
-    }
-    return dir;
 }
 
 //////////////////////////////////////////////////////////////////////
