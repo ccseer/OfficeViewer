@@ -6,7 +6,12 @@
         "viewer"
     ],
     "entry": "officeviewer.dll",
-    "args": [],
+    "args": [
+        "-w",
+        "960",
+        "-h",
+        "960"
+    ],
     "formats": [
         "123",
         "cdr",
