@@ -19,6 +19,9 @@ LRESULT CALLBACK ViewerWndProc(HWND hwnd,
                                WPARAM wParam,
                                LPARAM lParam);
 
+namespace {
+inline constexpr auto g_prop_key = L"OfficeViewer";
+
 class Thread : public QThread {
     using QThread::run;
 
@@ -30,6 +33,7 @@ public:
         qprintt << "~" << this;
     }
 };
+}  // namespace
 
 OfficeViewer::OfficeViewer(QWidget *parent)
     : ViewerBase(parent),
@@ -66,7 +70,16 @@ OfficeViewer::~OfficeViewer()
 
 QSize OfficeViewer::getContentSize() const
 {
-    return m_d->d->dpr * QSize(800, 700);
+    const auto sz_def = m_d->d->dpr * QSize(800, 700);
+    auto cmd          = property(g_property_key_cmd).toStringList();
+    if (!cmd.isEmpty()) {
+        auto parsed = seer::parseViewerSizeFromConfig(cmd);
+        qprintt << "getContentSize: parsed" << parsed << cmd;
+        if (parsed.isValid()) {
+            return parsed;
+        }
+    }
+    return sz_def;
 }
 
 void OfficeViewer::updateDPR(qreal r)
@@ -149,6 +162,8 @@ void OfficeViewer::onDllLoaded(HMODULE lib)
     LONG_PTR origProc = GetWindowLongPtr(m_viewer, GWLP_WNDPROC);
     SetWindowLongPtr(m_viewer, GWLP_USERDATA, origProc);
     SetWindowLongPtr(m_viewer, GWLP_WNDPROC, (LONG_PTR)ViewerWndProc);
+
+    SetProp(m_viewer, g_prop_key, this);
 
     // SendMessage(m_viewer, SCCVW_SETOPTION)
     if (!viewFile(m_d->d->path)) {
@@ -299,9 +314,9 @@ LRESULT CALLBACK ViewerWndProc(HWND hwnd,
     case SCCVW_KEYDOWN: {
         bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000);
         if (ctrl && lParam == 'C') {
-            // hwnd == m_viewer
-            SendMessage(hwnd, SCCVW_COPYTOCLIP, 0, 0L);
-        }
+                // hwnd == m_viewer
+                SendMessage(hwnd, SCCVW_COPYTOCLIP, 0, 0L);
+            }
         break;
     }
     }
