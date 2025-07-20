@@ -9,16 +9,10 @@
 
 class OfficeViewer : public ViewerBase {
     Q_OBJECT
-    Q_PLUGIN_METADATA(IID ViewerBase_iid FILE "../bin/plugin.json")
-    Q_INTERFACES(ViewerBase)
 public:
     explicit OfficeViewer(QWidget *parent = nullptr);
     ~OfficeViewer() override;
 
-    ViewerBase *createViewer(QWidget *parent = nullptr) override
-    {
-        return new OfficeViewer(parent);
-    }
     QString name() const override
     {
         return "OfficeViewer";
@@ -47,12 +41,11 @@ private:
     QTimer m_timer_resize;
 };
 
-//////////////////////////////////
+/////////////////////////////////
 class DllLoader : public QObject {
     Q_OBJECT
 public:
     DllLoader(const QString &dir);
-
     ~DllLoader() override;
 
     void process();
@@ -62,4 +55,16 @@ public:
 
 private:
     const QString m_dir;
+};
+
+/////////////////////////////////////////////////////////////////
+class OfficePlugin : public QObject, public ViewerPluginInterface {
+    Q_OBJECT
+    Q_PLUGIN_METADATA(IID ViewerPluginInterface_iid FILE "../bin/plugin.json")
+    Q_INTERFACES(ViewerPluginInterface)
+public:
+    ViewerBase *createViewer(QWidget *parent = nullptr) override
+    {
+        return new OfficeViewer(parent);
+    }
 };
