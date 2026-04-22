@@ -1,6 +1,7 @@
 #include "officeviewer.h"
 
 #include <QDir>
+#include <QMetaObject>
 #include <QPointer>
 #include <QResizeEvent>
 #include <QStandardPaths>
@@ -452,9 +453,23 @@ LRESULT CALLBACK ViewerWndProc(HWND hwnd,
     }
     case SCCVW_KEYDOWN: {
         bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000);
+
+        // Ctrl+C: Copy to clipboard
         if (ctrl && lParam == 'C') {
-            // hwnd == m_viewer
             SendMessage(hwnd, SCCVW_COPYTOCLIP, 0, 0L);
+        }
+        // Esc or Ctrl+W: Close the preview window
+        else if (lParam == VK_ESCAPE || (ctrl && lParam == 'W')) {
+            if (OfficeViewer *viewer = (OfficeViewer *)GetProp(hwnd, g_prop_key)) {
+                qprintt << "Close window requested via keyboard shortcut";
+                // Use QMetaObject::invokeMethod to safely call from Windows callback
+                QMetaObject::invokeMethod(
+                    viewer,
+                    [viewer]() {
+                        viewer->sigCommand(ViewCommandType::VCT_HideWindow, 0);
+                    },
+                    Qt::QueuedConnection);
+            }
         }
         break;
     }
