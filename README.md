@@ -26,10 +26,6 @@ Requirements: Qt 6.8, CMake 3.16+.
    - `officeviewer.dll` — the Seer plugin
    - `test_officeviewer.exe` — standalone viewer for testing
 
-4. **Install the plugin**
-
-   Copy `officeviewer.dll` to your Seer plugins directory.
-
 ## Seer Plugin
 
 OfficeViewer is a file preview plugin for [Seer](https://1218.io) — a quick-look tool for Windows.

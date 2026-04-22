@@ -7,11 +7,12 @@
 #include <QThread>
 
 #include "sccvw.h"
+// sequence matters, must be included after sccvw.h
+#include "scclink.c"
+#include "sccop.h"
 #include "seer/viewerhelper.h"
 
 #pragma comment(lib, "user32.lib")
-// need to be included below sccvw.h
-#include "scclink.c"
 
 #define qprintt qDebug() << "[officeviewer]"
 LRESULT CALLBACK ViewerWndProc(HWND hwnd,
@@ -20,7 +21,32 @@ LRESULT CALLBACK ViewerWndProc(HWND hwnd,
                                LPARAM lParam);
 
 namespace {
-inline constexpr auto g_prop_key = L"OfficeViewer";
+constexpr auto g_prop_key = L"OfficeViewer";
+
+bool setViewerOption(HWND viewer,
+                     VTDWORD optionId,
+                     VTVOID *data,
+                     const char *name)
+{
+    if (!viewer || !IsWindow(viewer)) {
+        return false;
+    }
+
+    SCCVWOPTIONSPEC40 optionSpec = {};
+    optionSpec.dwSize            = sizeof(SCCVWOPTIONSPEC40);
+    optionSpec.dwId              = optionId;
+    optionSpec.dwFlags           = SCCVWOPTION_CURRENT;
+    optionSpec.pData             = data;
+
+    const auto ret
+        = SendMessage(viewer, SCCVW_SETOPTION, 0, (LPARAM)&optionSpec);
+    if (ret != SCCVWERR_OK) {
+        qprintt << "SCCVW_SETOPTION failed" << name << optionId << ret;
+        return false;
+    }
+
+    return true;
+}
 
 class Thread : public QThread {
     using QThread::run;
@@ -71,7 +97,8 @@ OfficeViewer::~OfficeViewer()
 QSize OfficeViewer::getContentSize() const
 {
     const auto sz_def = options()->dpr() * QSize(800, 700);
-    auto cmd = options()->property(ViewOptionsKeys::kKeyPluginCmd).toStringList();
+    auto cmd
+        = options()->property(ViewOptionsKeys::kKeyPluginCmd).toStringList();
     if (!cmd.isEmpty()) {
         auto parsed = seer::parseViewerSizeFromConfig(cmd);
         qprintt << "getContentSize: parsed" << parsed << cmd;
@@ -86,6 +113,38 @@ void OfficeViewer::updateDPR(qreal r)
 {
     if (m_layout) {
         m_layout->setContentsMargins(r * 9, r * 9, r * 9, r * 9);
+    }
+
+    // Update viewer DPI settings when DPR changes
+    if (m_viewer && IsWindow(m_viewer)) {
+        qprintt << "Updating DPR to:" << r;
+
+        SCCVWOPTIONSPEC40 optionSpec;
+        VTDWORD value;
+
+        // Update font scaling factor
+        value              = static_cast<VTDWORD>(r * 100);
+        optionSpec.dwSize  = sizeof(SCCVWOPTIONSPEC40);
+        optionSpec.dwId    = SCCOPT_FONTSCALINGFACTOR;
+        optionSpec.dwFlags = SCCVWOPTION_CURRENT;
+        optionSpec.pData   = (VTVOID *)&value;
+        SendMessage(m_viewer, SCCVW_SETOPTION, 0, (LPARAM)&optionSpec);
+
+        // Update zoom level for word processing documents
+        value              = static_cast<VTDWORD>(r * 100);
+        optionSpec.dwSize  = sizeof(SCCVWOPTIONSPEC40);
+        optionSpec.dwId    = SCCOPT_WPZOOM;
+        optionSpec.dwFlags = SCCVWOPTION_CURRENT;
+        optionSpec.pData   = (VTVOID *)&value;
+        SendMessage(m_viewer, SCCVW_SETOPTION, 0, (LPARAM)&optionSpec);
+
+        // Update zoom level for bitmap images
+        value              = static_cast<VTDWORD>(r * 100);
+        optionSpec.dwSize  = sizeof(SCCVWOPTIONSPEC40);
+        optionSpec.dwId    = SCCOPT_BMPZOOM;
+        optionSpec.dwFlags = SCCVWOPTION_CURRENT;
+        optionSpec.pData   = (VTVOID *)&value;
+        SendMessage(m_viewer, SCCVW_SETOPTION, 0, (LPARAM)&optionSpec);
     }
 }
 
@@ -164,7 +223,26 @@ void OfficeViewer::onDllLoaded(HMODULE lib)
 
     SetProp(m_viewer, g_prop_key, this);
 
-    // SendMessage(m_viewer, SCCVW_SETOPTION)
+    VTDWORD wpDisplayMode = SCCVW_WPMODE_NORMAL;
+    setViewerOption(m_viewer, SCCOPT_WPDISPLAYMODE, &wpDisplayMode,
+                    "SCCOPT_WPDISPLAYMODE");
+
+    VTBOOL useDocPageSettings = FALSE;
+    setViewerOption(m_viewer, SCCOPT_USEDOCPAGESETTINGS, &useDocPageSettings,
+                    "SCCOPT_USEDOCPAGESETTINGS");
+
+    VTDWORD dialogFlags = SCCVW_DIALOG_NOADDOPTIONSTOMENU
+                          | SCCVW_DIALOG_NOADDPRINTTOMENU
+                          | SCCVW_DIALOG_NOADDDOPRINTTOMENU;
+    setViewerOption(m_viewer, SCCOPT_DIALOGFLAGS, &dialogFlags,
+                    "SCCOPT_DIALOGFLAGS");
+
+    // Configure high DPI support
+    configureHighDPI();
+
+    // Disable all print-related functionality
+    disablePrintFeatures();
+
     if (!viewFile(options()->path())) {
         qprintt << "ViewFile Err";
         emit sigCommand(ViewCommandType::VCT_StateChange, VCV_Error);
@@ -202,6 +280,65 @@ bool OfficeViewer::viewFile(const QString &p)
     return true;
 }
 
+void OfficeViewer::disablePrintFeatures()
+{
+    if (!m_viewer || !IsWindow(m_viewer)) {
+        return;
+    }
+
+    qprintt << "Disabling print features";
+
+    VTDWORD whatToPrint = SCCVW_PRINT_ALLPAGES;
+    setViewerOption(m_viewer, SCCOPT_WHATTOPRINT, &whatToPrint,
+                    "SCCOPT_WHATTOPRINT");
+
+    VTDWORD printCopies = 1;
+    setViewerOption(m_viewer, SCCOPT_PRINTCOPIES, &printCopies,
+                    "SCCOPT_PRINTCOPIES");
+
+    VTDWORD wpPrintMode = 0;
+    setViewerOption(m_viewer, SCCOPT_WPPRINTMODE, &wpPrintMode,
+                    "SCCOPT_WPPRINTMODE");
+}
+
+void OfficeViewer::configureHighDPI()
+{
+    if (!m_viewer || !IsWindow(m_viewer)) {
+        return;
+    }
+
+    const qreal dpr = options()->dpr();
+    qprintt << "Configuring high DPI, scale factor:" << dpr;
+
+    SCCVWOPTIONSPEC40 optionSpec;
+    VTDWORD value;
+
+    // Set font scaling factor for high DPI displays
+    // Value is in percentage (100 = normal, 150 = 150%, 200 = 200%)
+    value              = static_cast<VTDWORD>(dpr * 100);
+    optionSpec.dwSize  = sizeof(SCCVWOPTIONSPEC40);
+    optionSpec.dwId    = SCCOPT_FONTSCALINGFACTOR;
+    optionSpec.dwFlags = SCCVWOPTION_CURRENT;
+    optionSpec.pData   = (VTVOID *)&value;
+    SendMessage(m_viewer, SCCVW_SETOPTION, 0, (LPARAM)&optionSpec);
+
+    // Set zoom level for word processing documents
+    value              = static_cast<VTDWORD>(dpr * 100);
+    optionSpec.dwSize  = sizeof(SCCVWOPTIONSPEC40);
+    optionSpec.dwId    = SCCOPT_WPZOOM;
+    optionSpec.dwFlags = SCCVWOPTION_CURRENT;
+    optionSpec.pData   = (VTVOID *)&value;
+    SendMessage(m_viewer, SCCVW_SETOPTION, 0, (LPARAM)&optionSpec);
+
+    // Set zoom level for bitmap images
+    value              = static_cast<VTDWORD>(dpr * 100);
+    optionSpec.dwSize  = sizeof(SCCVWOPTIONSPEC40);
+    optionSpec.dwId    = SCCOPT_BMPZOOM;
+    optionSpec.dwFlags = SCCVWOPTION_CURRENT;
+    optionSpec.pData   = (VTVOID *)&value;
+    SendMessage(m_viewer, SCCVW_SETOPTION, 0, (LPARAM)&optionSpec);
+}
+
 void OfficeViewer::doResize()
 {
     if (!m_viewer || !IsWindow(m_viewer) || !m_container) {
@@ -232,12 +369,15 @@ LRESULT CALLBACK ViewerWndProc(HWND hwnd,
                                LPARAM lParam)
 {
     switch (msg) {
+    case SCCVW_PRINT:
+    case SCCVW_PRINTSETUP:
+    case SCCVW_PRINTEX:
+        // Block all print-related messages
+        qprintt << "Print message blocked:" << msg;
+        return 1;  // Return non-zero to indicate message was handled
     case SCCVW_CONTEXTMENU: {
-        // return 0, the Viewer will pop up its own context menu.
-        // If the return value is anything but 0, the Viewer does nothing.
-        // if you want to stop the event being handled by Qt,
-        // return true and set result.
-        return 0;
+        // Seer does not expose OIT's built-in print flow.
+        return 1;
     }
     case SCCVW_BAILOUT: {
         // file viewing has stopped

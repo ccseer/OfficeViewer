@@ -16,7 +16,7 @@ int main(int argc, char *argv[])
     }
 
     ViewOptionsPrivate d;
-    d.dpr         = 1;
+    d.dpr         = 1.5;
     d.theme       = 1;
     d.path        = path;
     d.viewer_type = "officeviewer";
