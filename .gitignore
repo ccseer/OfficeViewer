@@ -71,3 +71,6 @@ sdk/*
 *.id
 *.bin
 bin/oit_font_metrics.db-journal
+.vs
+CMakePresets.json
+CMakeUserPresets.json

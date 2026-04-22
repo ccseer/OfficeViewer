@@ -1,4 +1,7 @@
 BasedOnStyle: google
+DerivePointerAlignment: false
+PointerAlignment: Right
+ReferenceAlignment: Right
 BreakBeforeTernaryOperators: true
 BinPackParameters: false
 AllowShortFunctionsOnASingleLine: Empty
@@ -14,7 +17,7 @@ AlignConsecutiveAssignments: true
 BreakBeforeBinaryOperators: All
 ColumnLimit: 80
 AlignAfterOpenBracket: Align
-Standard: Cpp11
+Standard: c++17
 IndentWidth: 4
 BreakBeforeBraces: Stroustrup
 IndentCaseLabels: false

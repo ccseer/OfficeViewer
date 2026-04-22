@@ -7,7 +7,7 @@
 #include <QThread>
 
 #include "sccvw.h"
-#include "seer/viewer_helper.h"
+#include "seer/viewerhelper.h"
 
 #pragma comment(lib, "user32.lib")
 // need to be included below sccvw.h
@@ -70,8 +70,8 @@ OfficeViewer::~OfficeViewer()
 
 QSize OfficeViewer::getContentSize() const
 {
-    const auto sz_def = m_d->d->dpr * QSize(800, 700);
-    auto cmd          = property(g_property_key_cmd).toStringList();
+    const auto sz_def = options()->dpr() * QSize(800, 700);
+    auto cmd = options()->property(ViewOptionsKeys::kKeyPluginCmd).toStringList();
     if (!cmd.isEmpty()) {
         auto parsed = seer::parseViewerSizeFromConfig(cmd);
         qprintt << "getContentSize: parsed" << parsed << cmd;
@@ -84,7 +84,6 @@ QSize OfficeViewer::getContentSize() const
 
 void OfficeViewer::updateDPR(qreal r)
 {
-    m_d->d->dpr = r;
     if (m_layout) {
         m_layout->setContentsMargins(r * 9, r * 9, r * 9, r * 9);
     }
@@ -102,7 +101,7 @@ void OfficeViewer::loadImpl(QBoxLayout *layout_content,
     m_container->setAttribute(Qt::WA_NativeWindow, true);
     layout_content->addWidget(m_container);
 
-    updateDPR(m_d->d->dpr);
+    updateDPR(options()->dpr());
     m_timer_resize.setSingleShot(true);
     m_timer_resize.setInterval(200);
     connect(&m_timer_resize, &QTimer::timeout, this, &OfficeViewer::doResize);
@@ -166,7 +165,7 @@ void OfficeViewer::onDllLoaded(HMODULE lib)
     SetProp(m_viewer, g_prop_key, this);
 
     // SendMessage(m_viewer, SCCVW_SETOPTION)
-    if (!viewFile(m_d->d->path)) {
+    if (!viewFile(options()->path())) {
         qprintt << "ViewFile Err";
         emit sigCommand(ViewCommandType::VCT_StateChange, VCV_Error);
         return;
@@ -314,9 +313,9 @@ LRESULT CALLBACK ViewerWndProc(HWND hwnd,
     case SCCVW_KEYDOWN: {
         bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000);
         if (ctrl && lParam == 'C') {
-                // hwnd == m_viewer
-                SendMessage(hwnd, SCCVW_COPYTOCLIP, 0, 0L);
-            }
+            // hwnd == m_viewer
+            SendMessage(hwnd, SCCVW_COPYTOCLIP, 0, 0L);
+        }
         break;
     }
     }

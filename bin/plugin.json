@@ -1,6 +1,6 @@
 {
     "name": "OfficeViewer",
-    "version": "1.4.1",
+    "version": "1.5.0",
     "type": "dll",
     "roles": [
         "viewer"
@@ -45,7 +45,7 @@
         "xltm",
         "xlsx"
     ],
-    "appMinVersion": "4.1.2",
+    "appMinVersion": "4.2.9",
     "author": "corey",
-    "releaseDate": "2025-07-20"
+    "releaseDate": "2026-04-22"
 }
