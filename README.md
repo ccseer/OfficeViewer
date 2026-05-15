@@ -36,3 +36,7 @@ OfficeViewer is a file preview plugin for [Seer](https://1218.io) — a quick-lo
 - Built as a native DLL plugin for Seer 4.0.0+
 
 Visit [1218.io](https://1218.io) to download Seer and learn more about the plugin ecosystem.
+
+## todo:
+
+- add support for ctrl + wheel, ctrl+ -/=
