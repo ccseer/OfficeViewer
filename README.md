@@ -40,3 +40,4 @@ Visit [1218.io](https://1218.io) to download Seer and learn more about the plugi
 ## todo:
 
 - add support for ctrl + wheel, ctrl+ -/=
+- restore dpr issue
