@@ -32,7 +32,6 @@ private:
     void doResize();
     bool viewFile(const QString &p);
     void disablePrintFeatures();
-    void configureHighDPI();
 
     QWidget *m_container;
     QBoxLayout *m_layout;

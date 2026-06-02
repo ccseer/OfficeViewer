@@ -115,38 +115,6 @@ void OfficeViewer::updateDPR(qreal r)
     if (m_layout) {
         m_layout->setContentsMargins(r * 9, r * 9, r * 9, r * 9);
     }
-
-    // Update viewer DPI settings when DPR changes
-    if (m_viewer && IsWindow(m_viewer)) {
-        qprintt << "Updating DPR to:" << r;
-
-        SCCVWOPTIONSPEC40 optionSpec;
-        VTDWORD value;
-
-        // Update font scaling factor
-        value              = static_cast<VTDWORD>(r * 100);
-        optionSpec.dwSize  = sizeof(SCCVWOPTIONSPEC40);
-        optionSpec.dwId    = SCCOPT_FONTSCALINGFACTOR;
-        optionSpec.dwFlags = SCCVWOPTION_CURRENT;
-        optionSpec.pData   = (VTVOID *)&value;
-        SendMessage(m_viewer, SCCVW_SETOPTION, 0, (LPARAM)&optionSpec);
-
-        // Update zoom level for word processing documents
-        value              = static_cast<VTDWORD>(r * 100);
-        optionSpec.dwSize  = sizeof(SCCVWOPTIONSPEC40);
-        optionSpec.dwId    = SCCOPT_WPZOOM;
-        optionSpec.dwFlags = SCCVWOPTION_CURRENT;
-        optionSpec.pData   = (VTVOID *)&value;
-        SendMessage(m_viewer, SCCVW_SETOPTION, 0, (LPARAM)&optionSpec);
-
-        // Update zoom level for bitmap images
-        value              = static_cast<VTDWORD>(r * 100);
-        optionSpec.dwSize  = sizeof(SCCVWOPTIONSPEC40);
-        optionSpec.dwId    = SCCOPT_BMPZOOM;
-        optionSpec.dwFlags = SCCVWOPTION_CURRENT;
-        optionSpec.pData   = (VTVOID *)&value;
-        SendMessage(m_viewer, SCCVW_SETOPTION, 0, (LPARAM)&optionSpec);
-    }
 }
 
 void OfficeViewer::loadImpl(QBoxLayout *layout_content,
@@ -238,9 +206,6 @@ void OfficeViewer::onDllLoaded(HMODULE lib)
     setViewerOption(m_viewer, SCCOPT_DIALOGFLAGS, &dialogFlags,
                     "SCCOPT_DIALOGFLAGS");
 
-    // Configure high DPI support
-    configureHighDPI();
-
     // Disable all print-related functionality
     disablePrintFeatures();
 
@@ -300,44 +265,6 @@ void OfficeViewer::disablePrintFeatures()
     VTDWORD wpPrintMode = 0;
     setViewerOption(m_viewer, SCCOPT_WPPRINTMODE, &wpPrintMode,
                     "SCCOPT_WPPRINTMODE");
-}
-
-void OfficeViewer::configureHighDPI()
-{
-    if (!m_viewer || !IsWindow(m_viewer)) {
-        return;
-    }
-
-    const qreal dpr = options()->dpr();
-    qprintt << "Configuring high DPI, scale factor:" << dpr;
-
-    SCCVWOPTIONSPEC40 optionSpec;
-    VTDWORD value;
-
-    // Set font scaling factor for high DPI displays
-    // Value is in percentage (100 = normal, 150 = 150%, 200 = 200%)
-    value              = static_cast<VTDWORD>(dpr * 100);
-    optionSpec.dwSize  = sizeof(SCCVWOPTIONSPEC40);
-    optionSpec.dwId    = SCCOPT_FONTSCALINGFACTOR;
-    optionSpec.dwFlags = SCCVWOPTION_CURRENT;
-    optionSpec.pData   = (VTVOID *)&value;
-    SendMessage(m_viewer, SCCVW_SETOPTION, 0, (LPARAM)&optionSpec);
-
-    // Set zoom level for word processing documents
-    value              = static_cast<VTDWORD>(dpr * 100);
-    optionSpec.dwSize  = sizeof(SCCVWOPTIONSPEC40);
-    optionSpec.dwId    = SCCOPT_WPZOOM;
-    optionSpec.dwFlags = SCCVWOPTION_CURRENT;
-    optionSpec.pData   = (VTVOID *)&value;
-    SendMessage(m_viewer, SCCVW_SETOPTION, 0, (LPARAM)&optionSpec);
-
-    // Set zoom level for bitmap images
-    value              = static_cast<VTDWORD>(dpr * 100);
-    optionSpec.dwSize  = sizeof(SCCVWOPTIONSPEC40);
-    optionSpec.dwId    = SCCOPT_BMPZOOM;
-    optionSpec.dwFlags = SCCVWOPTION_CURRENT;
-    optionSpec.pData   = (VTVOID *)&value;
-    SendMessage(m_viewer, SCCVW_SETOPTION, 0, (LPARAM)&optionSpec);
 }
 
 void OfficeViewer::doResize()
