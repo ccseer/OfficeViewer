@@ -2,6 +2,7 @@
 
 #include <qt_windows.h>
 
+#include <QPushButton>
 #include <QTimer>
 #include <atomic>
 
@@ -27,17 +28,28 @@ protected:
     void resizeEvent(QResizeEvent *event) override;
 
 private:
+    friend LRESULT CALLBACK ViewerWndProc(HWND hwnd,
+                                          UINT msg,
+                                          WPARAM wParam,
+                                          LPARAM lParam);
+
     void asyncInit();
     void onDllLoaded(HMODULE lib);
     void doResize();
     bool viewFile(const QString &p);
     void disablePrintFeatures();
+    bool applyZoomPercent(int percent);
+    void stepZoom(int deltaPercent);
+    void resetZoom();
+    void syncZoomButton();
 
     QWidget *m_container;
     QBoxLayout *m_layout;
+    QPushButton *m_btn_zoom;
 
     HWND m_viewer;
     HANDLE m_lib;
+    int m_zoom_percent;
 
     QTimer m_timer_resize;
 };
