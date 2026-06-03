@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(officeviewer VERSION 1.5.0 LANGUAGES CXX)
+project(officeviewer VERSION 1.5.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -21,6 +21,18 @@ FetchContent_MakeAvailable(SeerSdk)
 set(OIT_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/sdk")
 include_directories(${OIT_SDK_DIR}/common)
 
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/version.rc.in
+    ${CMAKE_CURRENT_BINARY_DIR}/version.rc
+    @ONLY
+)
+
+if(MSVC)
+    set(VERSION_RC_SRC "${CMAKE_CURRENT_BINARY_DIR}/version.rc")
+else()
+    set(VERSION_RC_SRC "")
+endif()
+
 add_library(officeviewer SHARED
     src/officeviewer.cpp
     src/officeviewer.h
@@ -28,6 +40,7 @@ add_library(officeviewer SHARED
     ${seersdk_SOURCE_DIR}/seer/viewerbase.h
     ${seersdk_SOURCE_DIR}/seer/viewerhelper.h
     ${seersdk_SOURCE_DIR}/seer/viewoption.h
+    ${VERSION_RC_SRC}
 )
 
 target_include_directories(officeviewer PRIVATE

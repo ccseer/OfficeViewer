@@ -1,6 +1,6 @@
 {
     "name": "OfficeViewer",
-    "version": "1.5.0",
+    "version": "1.5.1",
     "type": "dll",
     "roles": [
         "viewer"
@@ -8,7 +8,7 @@
     "entry": "officeviewer.dll",
     "args": [
         "-w",
-        "960",
+        "1080",
         "-h",
         "960"
     ],
@@ -47,5 +47,5 @@
     ],
     "appMinVersion": "4.2.9",
     "author": "corey",
-    "releaseDate": "2026-04-22"
+    "releaseDate": "2026-06-02"
 }

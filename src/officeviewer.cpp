@@ -22,9 +22,9 @@ LRESULT CALLBACK ViewerWndProc(HWND hwnd,
                                LPARAM lParam);
 
 namespace {
-constexpr auto g_prop_key = L"OfficeViewer";
-constexpr int kZoomMinPercent = 25;
-constexpr int kZoomMaxPercent = 500;
+constexpr auto g_prop_key      = L"OfficeViewer";
+constexpr int kZoomMinPercent  = 25;
+constexpr int kZoomMaxPercent  = 500;
 constexpr int kZoomStepPercent = 10;
 
 bool setViewerOption(HWND viewer,
@@ -133,9 +133,10 @@ void OfficeViewer::loadImpl(QBoxLayout *layout_content,
         m_btn_zoom->setCursor(Qt::PointingHandCursor);
         m_btn_zoom->setToolTip("Reset zoom");
         syncZoomButton();
-        connect(m_btn_zoom, &QPushButton::clicked, this, &OfficeViewer::resetZoom);
-        layout_control_bar->addWidget(m_btn_zoom);
+        connect(m_btn_zoom, &QPushButton::clicked, this,
+                &OfficeViewer::resetZoom);
         layout_control_bar->addStretch();
+        layout_control_bar->addWidget(m_btn_zoom);
     }
     m_layout    = layout_content;
     m_container = new QWidget(this);
@@ -163,8 +164,8 @@ void OfficeViewer::asyncInit()
     if (!dir_dll.endsWith("\\")) {
         dir_dll.append("\\");
     }
-    auto thread           = new Thread;
-    QPointer worker       = new DllLoader(dir_dll);
+    auto thread     = new Thread;
+    QPointer worker = new DllLoader(dir_dll);
     QPointer<OfficeViewer> self(this);
     connect(this, &QObject::destroyed, [worker]() {
         if (worker) {
@@ -181,12 +182,14 @@ void OfficeViewer::asyncInit()
                 [self, lib]() {
                     if (self) {
                         self->onDllLoaded(lib);
-                    } else if (lib) {
+                    }
+                    else if (lib) {
                         FreeLibrary(lib);
                     }
                 },
                 Qt::QueuedConnection);
-        } else if (lib) {
+        }
+        else if (lib) {
             FreeLibrary(lib);
         }
     });
@@ -303,26 +306,27 @@ bool OfficeViewer::applyZoomPercent(int percent)
     }
 
     const int clamped = qBound(kZoomMinPercent, percent, kZoomMaxPercent);
-    VTDWORD wpValue = static_cast<VTDWORD>(clamped);
+    VTDWORD wpValue   = static_cast<VTDWORD>(clamped);
     SCCVWIMAGEZOOM imageZoom = {};
-    imageZoom.dwXNu = clamped;
-    imageZoom.dwXDe = 100;
-    imageZoom.dwYNu = clamped;
-    imageZoom.dwYDe = 100;
+    imageZoom.dwXNu          = clamped;
+    imageZoom.dwXDe          = 100;
+    imageZoom.dwYNu          = clamped;
+    imageZoom.dwYDe          = 100;
 
     SCCVWDISPLAYINFO80 displayInfo = {};
-    displayInfo.dwSize = sizeof(SCCVWDISPLAYINFO80);
+    displayInfo.dwSize             = sizeof(SCCVWDISPLAYINFO80);
     const auto displayRet
         = SendMessage(m_viewer, SCCVW_GETDISPLAYINFO, 0, (LPARAM)&displayInfo);
 
-    const bool wpOk = setViewerOption(m_viewer, SCCOPT_WPZOOM, &wpValue,
-                                      "SCCOPT_WPZOOM");
+    const bool wpOk
+        = setViewerOption(m_viewer, SCCOPT_WPZOOM, &wpValue, "SCCOPT_WPZOOM");
     bool graphicOk = false;
     if (displayRet == SCCVWERR_OK) {
         if (displayInfo.dwType == SCCVWTYPE_IMAGE) {
             graphicOk = setViewerOption(m_viewer, SCCOPT_BMPZOOM, &imageZoom,
                                         "SCCOPT_BMPZOOM");
-        } else if (displayInfo.dwType == SCCVWTYPE_VECTOR) {
+        }
+        else if (displayInfo.dwType == SCCVWTYPE_VECTOR) {
             graphicOk = setViewerOption(m_viewer, SCCOPT_VECZOOM, &imageZoom,
                                         "SCCOPT_VECZOOM");
         }
@@ -470,7 +474,7 @@ LRESULT CALLBACK ViewerWndProc(HWND hwnd,
         break;
     }
     case SCCVW_KEYDOWN: {
-        bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000);
+        bool ctrl            = (GetKeyState(VK_CONTROL) & 0x8000);
         OfficeViewer *viewer = (OfficeViewer *)GetProp(hwnd, g_prop_key);
 
         // Ctrl+C: Copy to clipboard
@@ -483,7 +487,8 @@ LRESULT CALLBACK ViewerWndProc(HWND hwnd,
             return 1;
         }
         else if (viewer
-                 && (lParam == VK_SUBTRACT || (ctrl && lParam == VK_OEM_MINUS))) {
+                 && (lParam == VK_SUBTRACT
+                     || (ctrl && lParam == VK_OEM_MINUS))) {
             viewer->stepZoom(-kZoomStepPercent);
             return 1;
         }
@@ -491,7 +496,8 @@ LRESULT CALLBACK ViewerWndProc(HWND hwnd,
         else if (lParam == VK_ESCAPE || (ctrl && lParam == 'W')) {
             if (viewer) {
                 qprintt << "Close window requested via keyboard shortcut";
-                // Use QMetaObject::invokeMethod to safely call from Windows callback
+                // Use QMetaObject::invokeMethod to safely call from Windows
+                // callback
                 QMetaObject::invokeMethod(
                     viewer,
                     [viewer]() {
@@ -504,11 +510,13 @@ LRESULT CALLBACK ViewerWndProc(HWND hwnd,
     }
     case WM_MOUSEWHEEL: {
         if ((GET_KEYSTATE_WPARAM(wParam) & MK_CONTROL) != 0) {
-            if (OfficeViewer *viewer = (OfficeViewer *)GetProp(hwnd, g_prop_key)) {
+            if (OfficeViewer *viewer
+                = (OfficeViewer *)GetProp(hwnd, g_prop_key)) {
                 const short delta = GET_WHEEL_DELTA_WPARAM(wParam);
                 if (delta > 0) {
                     viewer->stepZoom(kZoomStepPercent);
-                } else if (delta < 0) {
+                }
+                else if (delta < 0) {
                     viewer->stepZoom(-kZoomStepPercent);
                 }
                 return 1;
