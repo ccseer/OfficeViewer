@@ -91,6 +91,7 @@ OfficeViewer::~OfficeViewer()
 {
     qprintt << "~" << this;
     if (m_viewer) {
+        RemoveProp(m_viewer, g_prop_key);
         SendMessage(m_viewer, SCCVW_CLOSEFILE, 0, 0L);
         DestroyWindow(m_viewer);
         m_viewer = 0;
@@ -162,8 +163,9 @@ void OfficeViewer::asyncInit()
     if (!dir_dll.endsWith("\\")) {
         dir_dll.append("\\");
     }
-    auto thread     = new Thread;
-    QPointer worker = new DllLoader(dir_dll);
+    auto thread           = new Thread;
+    QPointer worker       = new DllLoader(dir_dll);
+    QPointer<OfficeViewer> self(this);
     connect(this, &QObject::destroyed, [worker]() {
         if (worker) {
             qprintt << "ui destroyed, stopping thread";
@@ -172,8 +174,22 @@ void OfficeViewer::asyncInit()
     });
     connect(worker, &DllLoader::sigFinished, worker, &QObject::deleteLater);
     connect(worker, &QObject::destroyed, thread, &QObject::deleteLater);
-    //
-    connect(worker, &DllLoader::sigFinished, this, &OfficeViewer::onDllLoaded);
+    connect(worker, &DllLoader::sigFinished, worker, [self](HMODULE lib) {
+        if (self) {
+            QMetaObject::invokeMethod(
+                self,
+                [self, lib]() {
+                    if (self) {
+                        self->onDllLoaded(lib);
+                    } else if (lib) {
+                        FreeLibrary(lib);
+                    }
+                },
+                Qt::QueuedConnection);
+        } else if (lib) {
+            FreeLibrary(lib);
+        }
+    });
     connect(thread, &QThread::started, worker, &DllLoader::process);
     worker->moveToThread(thread);
     thread->start();
@@ -287,13 +303,32 @@ bool OfficeViewer::applyZoomPercent(int percent)
     }
 
     const int clamped = qBound(kZoomMinPercent, percent, kZoomMaxPercent);
-    VTDWORD value = static_cast<VTDWORD>(clamped);
+    VTDWORD wpValue = static_cast<VTDWORD>(clamped);
+    SCCVWIMAGEZOOM imageZoom = {};
+    imageZoom.dwXNu = clamped;
+    imageZoom.dwXDe = 100;
+    imageZoom.dwYNu = clamped;
+    imageZoom.dwYDe = 100;
 
-    const bool wpOk = setViewerOption(m_viewer, SCCOPT_WPZOOM, &value,
+    SCCVWDISPLAYINFO80 displayInfo = {};
+    displayInfo.dwSize = sizeof(SCCVWDISPLAYINFO80);
+    const auto displayRet
+        = SendMessage(m_viewer, SCCVW_GETDISPLAYINFO, 0, (LPARAM)&displayInfo);
+
+    const bool wpOk = setViewerOption(m_viewer, SCCOPT_WPZOOM, &wpValue,
                                       "SCCOPT_WPZOOM");
-    const bool bmpOk = setViewerOption(m_viewer, SCCOPT_BMPZOOM, &value,
-                                       "SCCOPT_BMPZOOM");
-    if (!wpOk && !bmpOk) {
+    bool graphicOk = false;
+    if (displayRet == SCCVWERR_OK) {
+        if (displayInfo.dwType == SCCVWTYPE_IMAGE) {
+            graphicOk = setViewerOption(m_viewer, SCCOPT_BMPZOOM, &imageZoom,
+                                        "SCCOPT_BMPZOOM");
+        } else if (displayInfo.dwType == SCCVWTYPE_VECTOR) {
+            graphicOk = setViewerOption(m_viewer, SCCOPT_VECZOOM, &imageZoom,
+                                        "SCCOPT_VECZOOM");
+        }
+    }
+
+    if (!wpOk && !graphicOk) {
         return false;
     }
 
@@ -448,8 +483,7 @@ LRESULT CALLBACK ViewerWndProc(HWND hwnd,
             return 1;
         }
         else if (viewer
-                 && (lParam == VK_SUBTRACT
-                     || (ctrl && lParam == VK_OEM_MINUS))) {
+                 && (lParam == VK_SUBTRACT || (ctrl && lParam == VK_OEM_MINUS))) {
             viewer->stepZoom(-kZoomStepPercent);
             return 1;
         }
